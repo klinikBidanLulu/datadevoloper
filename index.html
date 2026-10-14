@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Customer</title>
+<title>Klinik Pramata Nani Medika — Data Customer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -52,12 +52,18 @@
         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20" stroke-linecap="round"/></svg>
       </div>
       <div>
-        <p class="font-bold leading-tight">cutomer</p>
+        <p class="font-bold leading-tight">Pramata Nani Medika</p>
         <p class="text-xs text-slate-500 leading-tight">Sistem Data Customer</p>
       </div>
     </div>
-    <div id="totalBadge" class="text-sm font-semibold text-brand-700 bg-brand-50 px-3 py-1.5 rounded-full border border-brand-100">
-      0 customer terdaftar
+    <div class="flex items-center gap-2">
+      <span id="statusBadge" class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 px-2.5 py-1 rounded-full border border-slate-200">
+        <span id="statusDot" class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+        <span id="statusText">Menghubungkan...</span>
+      </span>
+      <div id="totalBadge" class="text-sm font-semibold text-brand-700 bg-brand-50 px-3 py-1.5 rounded-full border border-brand-100">
+        0 customer terdaftar
+      </div>
     </div>
   </div>
 </header>
@@ -71,7 +77,7 @@
       <div class="text-center mb-8">
         <span class="eyebrow">Pendaftaran Resmi</span>
         <h3 class="text-2xl font-bold text-slate-900 mt-1">Registrasi Data Customer</h3>
-        <p class="text-sm text-slate-500 mt-2">Lengkapi data diri Anda untuk terintegrasi dengan sistem pelayanan.</p>
+        <p class="text-sm text-slate-500 mt-2">Lengkapi data diri Anda untuk terintegrasi dengan sistem pelayanan Klinik Pramata Nani Medika.</p>
       </div>
 
       <form id="formCustomerPro" novalidate class="space-y-5">
@@ -207,31 +213,69 @@
   &copy; 2026 Klinik Pramata Nani Medika — Sistem Data Customer Internal
 </footer>
 
-<script>
+<script type="module">
 /* =========================================================================
-   "OTAK" APLIKASI — penyimpanan data pakai localStorage browser.
-   Semua data tersimpan permanen di browser ini (tidak hilang saat refresh/
-   tutup tab), namun hanya ada di browser & komputer ini saja (tidak
-   otomatis tersinkron ke perangkat lain). Tidak ada kolom password email
-   customer yang disimpan di sini.
-   ========================================================================= */
-const STORAGE_KEY = 'klinik_customers_v1';
+   "OTAK" APLIKASI — penyimpanan data pakai Firebase Firestore (cloud).
+   Data tersimpan di server Firebase, bisa diakses & disinkron real-time
+   dari komputer/HP manapun yang membuka halaman ini. Tidak ada kolom
+   password email customer yang disimpan di sini.
 
-function getCustomers() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
-}
-function saveCustomers(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-}
-function nextId(list) {
-  return list.length ? Math.max(...list.map(c => c.id)) + 1 : 1;
-}
+   Keamanan: config di bawah (apiKey dkk) BUKAN rahasia — ini normal untuk
+   proyek web Firebase. Perlindungan datanya diatur lewat Firestore
+   Security Rules di Firebase Console (Build > Firestore Database > Rules),
+   BUKAN dengan menyembunyikan config ini. Supaya data customer tidak bisa
+   dibaca/ditulis sembarang orang dari internet, atur rules minimal seperti:
+
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /customers/{docId} {
+         allow read, write: if request.auth != null; // wajib login dulu
+       }
+     }
+   }
+
+   (Tanpa rule seperti ini, defaultnya Firestore menolak semua akses, atau
+   kalau masih dalam "test mode" semua orang bisa baca/tulis datanya.)
+   ========================================================================= */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, updateDoc, deleteDoc, doc,
+  onSnapshot, query, orderBy, serverTimestamp, Timestamp
+} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCCMvfemfusTzQgeotbUHABW7TyeqlqPqA",
+  authDomain: "contoh-d9248.firebaseapp.com",
+  projectId: "contoh-d9248",
+  storageBucket: "contoh-d9248.firebasestorage.app",
+  messagingSenderId: "525336339183",
+  appId: "1:525336339183:web:60e8b6053ae5ea392fb11a",
+  measurementId: "G-VGWMY9305X"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const customersCol = collection(db, "customers");
 
 const el = (id) => document.getElementById(id);
+const statusDot = el('statusDot');
+const statusText = el('statusText');
+const statusBadge = el('statusBadge');
+
+function setStatus(state, label) {
+  statusBadge.classList.remove('hidden');
+  statusText.textContent = label;
+  statusDot.className = 'w-1.5 h-1.5 rounded-full ' + (
+    state === 'ok' ? 'bg-brand-500' :
+    state === 'error' ? 'bg-red-500' :
+    'bg-amber-400'
+  );
+}
+
+// Data di memori, selalu disinkron otomatis dari Firestore (real-time).
+let customersCache = [];
 
 const form = el('formCustomerPro');
 const cpError = el('cpError');
@@ -259,12 +303,12 @@ function isValidEmail(email) {
 function isValidPhone(hp) {
   return /^[0-9+\-\s()]{8,20}$/.test(hp);
 }
-function fmtTanggal(iso) {
+function fmtTanggal(value) {
   try {
-    const d = new Date(iso);
+    const d = value instanceof Timestamp ? value.toDate() : new Date(value);
     return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   } catch {
-    return iso;
+    return '-';
   }
 }
 function initials(name) {
@@ -279,7 +323,7 @@ function escapeHtml(str) {
 // --- Render tabel -------------------------------------------------------
 function renderRows(rows) {
   tabelBody.innerHTML = '';
-  const total = getCustomers().length;
+  const total = customersCache.length;
   totalBadge.textContent = `${total} customer terdaftar`;
 
   if (rows.length === 0) {
@@ -318,23 +362,22 @@ function renderRows(rows) {
 }
 
 function muatData(query = '') {
-  const list = getCustomers().slice().sort((a, b) => b.id - a.id);
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? list.filter(c =>
+    ? customersCache.filter(c =>
         c.nama.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
         c.hp.toLowerCase().includes(q) ||
         c.perusahaan.toLowerCase().includes(q))
-    : list;
+    : customersCache;
   renderRows(filtered);
 }
 
-// --- Pencarian (live) -----------------------------------------------------
+// --- Pencarian (live, difilter dari cache lokal yang disinkron Firestore) --
 cariInput.addEventListener('input', () => muatData(cariInput.value));
 
 // --- Submit form pendaftaran ---------------------------------------------
-form.addEventListener('submit', (e) => {
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideError(cpError);
   cpSukses.classList.add('hidden');
@@ -356,43 +399,49 @@ form.addEventListener('submit', (e) => {
     showError(cpError, 'Format nomor telepon tidak valid.');
     return;
   }
-
-  const list = getCustomers();
-  if (list.some(c => c.email === email)) {
+  if (customersCache.some(c => c.email === email)) {
     showError(cpError, 'Email ini sudah terdaftar sebelumnya.');
     return;
   }
 
-  list.push({
-    id: nextId(list),
-    nama, email, hp, perusahaan,
-    created_at: new Date().toISOString(),
-  });
-  saveCustomers(list);
-
-  cpSukses.classList.remove('hidden');
-  form.reset();
-  el('cpKlinik').value = 'Klinik Pramata Nani Medika';
-  cariInput.value = '';
-  muatData();
-  setTimeout(() => cpSukses.classList.add('hidden'), 3500);
+  const btnSimpan = el('btnSimpanPro');
+  btnSimpan.disabled = true;
+  try {
+    await addDoc(customersCol, {
+      nama, email, hp, perusahaan,
+      created_at: serverTimestamp(),
+    });
+    cpSukses.classList.remove('hidden');
+    form.reset();
+    el('cpKlinik').value = 'Klinik Pramata Nani Medika';
+    cariInput.value = '';
+    setTimeout(() => cpSukses.classList.add('hidden'), 3500);
+  } catch (err) {
+    console.error(err);
+    showError(cpError, 'Gagal menyimpan ke server. Periksa koneksi internet atau Firestore Security Rules Anda.');
+  } finally {
+    btnSimpan.disabled = false;
+  }
 });
 
 // --- Aksi tabel: edit / hapus --------------------------------------------
-tabelBody.addEventListener('click', (e) => {
+tabelBody.addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-action]');
   if (!btn) return;
-  const id = Number(btn.dataset.id);
+  const id = btn.dataset.id;
 
   if (btn.dataset.action === 'delete') {
     if (!confirm('Hapus data customer ini? Tindakan ini tidak dapat dibatalkan.')) return;
-    const list = getCustomers().filter(c => c.id !== id);
-    saveCustomers(list);
-    muatData(cariInput.value);
+    try {
+      await deleteDoc(doc(db, 'customers', id));
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menghapus data. Periksa koneksi internet Anda.');
+    }
   }
 
   if (btn.dataset.action === 'edit') {
-    const r = getCustomers().find(c => c.id === id);
+    const r = customersCache.find(c => c.id === id);
     if (!r) return;
     el('editId').value = r.id;
     el('editNama').value = r.nama;
@@ -410,10 +459,10 @@ el('btnBatalEdit').addEventListener('click', () => {
   editModal.classList.remove('flex');
 });
 
-formEdit.addEventListener('submit', (e) => {
+formEdit.addEventListener('submit', async (e) => {
   e.preventDefault();
   editError.classList.add('hidden');
-  const id = Number(el('editId').value);
+  const id = el('editId').value;
 
   const nama = el('editNama').value.trim();
   const email = el('editEmail').value.trim().toLowerCase();
@@ -428,26 +477,36 @@ formEdit.addEventListener('submit', (e) => {
     showError(editError, 'Format nomor telepon tidak valid.');
     return;
   }
-
-  const list = getCustomers();
-  const dup = list.find(c => c.email === email && c.id !== id);
+  const dup = customersCache.find(c => c.email === email && c.id !== id);
   if (dup) {
     showError(editError, 'Email ini sudah dipakai customer lain.');
     return;
   }
 
-  const idx = list.findIndex(c => c.id === id);
-  if (idx === -1) return;
-  list[idx] = { ...list[idx], nama, email, hp, perusahaan };
-  saveCustomers(list);
-
-  editModal.classList.add('hidden');
-  editModal.classList.remove('flex');
-  muatData(cariInput.value);
+  try {
+    await updateDoc(doc(db, 'customers', id), { nama, email, hp, perusahaan });
+    editModal.classList.add('hidden');
+    editModal.classList.remove('flex');
+    muatData(cariInput.value);
+  } catch (err) {
+    console.error(err);
+    showError(editError, 'Gagal menyimpan perubahan. Periksa koneksi internet Anda.');
+  }
 });
 
-// --- Init ------------------------------------------------------------
-muatData();
+// --- Sinkronisasi real-time dengan Firestore -----------------------------
+setStatus('connecting', 'Menghubungkan...');
+
+const q = query(customersCol, orderBy('created_at', 'desc'));
+onSnapshot(q, (snapshot) => {
+  customersCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+  setStatus('ok', 'Terhubung');
+  muatData(cariInput.value);
+}, (err) => {
+  console.error(err);
+  setStatus('error', 'Gagal terhubung');
+  showError(cpError, 'Tidak bisa terhubung ke database. Kemungkinan Firestore Security Rules memblokir akses — cek Firebase Console.');
+});
 </script>
 </body>
 </html>
